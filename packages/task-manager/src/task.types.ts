@@ -22,6 +22,9 @@ export interface Actor {
 
 export type TaskStatus = "open" | "active" | "blocked" | "completed" | "abandoned";
 
+/** Where feedback came from: the user, a review finding, or CI. */
+export type TaskFeedbackSource = "user" | "review" | "ci";
+
 /**
  * Workflow phase. Free-form string so dev-debug and custom workflows
  * are not constrained. Recommended lifecycle values:
@@ -126,6 +129,7 @@ export type TaskEventType =
   | "task.artifact.add"
   | "task.attribution.set"
   | "task.note.append"
+  | "task.feedback.received"
   | "task.custom"
   | "task.closed";
 
@@ -207,6 +211,11 @@ export interface TaskAttributionSetPayload {
 
 export interface TaskNoteAppendPayload {
   text: string;
+}
+
+export interface TaskFeedbackReceivedPayload {
+  text: string;
+  source: TaskFeedbackSource;
 }
 
 export interface TaskCustomPayload {

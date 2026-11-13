@@ -7,6 +7,7 @@ import type {
   TaskEvent,
   TaskEventType,
   TaskEvidence,
+  TaskFeedbackSource,
   TaskLinks,
   TaskStatus,
 } from "./task.types.js";
@@ -90,6 +91,15 @@ function validateStatus(status: string): asserts status is TaskStatus {
   }
 }
 
+function validateFeedbackSource(source: string): asserts source is TaskFeedbackSource {
+  const valid: TaskFeedbackSource[] = ["user", "review", "ci"];
+  if (!valid.includes(source as TaskFeedbackSource)) {
+    throw new TaskValidationError(
+      `Invalid feedback source "${source}". Expected one of: ${valid.join(", ")}`,
+    );
+  }
+}
+
 function validateName(name: string | null | undefined): string | null {
   if (name === null || name === undefined || name === "") {
     return null;
@@ -111,7 +121,7 @@ function validateName(name: string | null | undefined): string | null {
  * Public methods:
  *   create, get, resolveTask, list, update, setPhase, setStatus, setProgress,
  *   setNextStep, addBlocker, resolveBlocker, addEvidence, addArtifact,
- *   setAttribution, addNote, close, addEvent, getEvents.
+ *   setAttribution, addNote, addFeedback, close, addEvent, getEvents.
  */
 export class TaskService {
   constructor(private readonly repository: TaskRepository) {}
@@ -470,6 +480,33 @@ export class TaskService {
     return this.refreshCachedCounters(task);
   }
 
+  /**
+   * Record feedback (user, review, or CI) as an event. With `reopen`, also moves
+   * the phase back in the same call, emitting the normal `task.phase.set`.
+   */
+  async addFeedback(
+    taskId: string,
+    input: { text: string; source?: TaskFeedbackSource; reopen?: string },
+    opts?: TaskMutationOptions,
+  ): Promise<Task> {
+    const text = input.text?.trim();
+    if (!text) {
+      throw new TaskValidationError("Feedback text must be a non-empty string.");
+    }
+    const source = input.source ?? "user";
+    validateFeedbackSource(source);
+    const reopen = input.reopen?.trim();
+    if (input.reopen !== undefined && !reopen) {
+      throw new TaskValidationError("Reopen phase must be a non-empty string.");
+    }
+    const task = await this.requireTask(taskId);
+    // Event-only: the phase move (if any) is recorded by setPhase.
+    const actor = opts?.actor ?? null;
+    await this.appendEventInternal(task.taskId, "task.feedback.received", { text, source }, actor);
+    const updated = reopen ? await this.setPhase(task.taskId, reopen, opts) : task;
+    return this.refreshCachedCounters(updated);
+  }
+
   async close(
     taskId: string,
     status: "completed" | "abandoned",
@@ -699,6 +736,7 @@ export class TaskService {
         return true;
       }
       case "task.note.append":
+      case "task.feedback.received":
       case "task.custom":
         return false;
       default:

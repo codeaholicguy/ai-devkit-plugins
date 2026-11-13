@@ -155,6 +155,16 @@ describe("addEvent escape hatch — every stateful type", () => {
     expect((await service.get(task.taskId)).status).toBe("abandoned");
   });
 
+  it("task.feedback.received appends via addEvent without mutating snapshot", async () => {
+    const task = await service.create({ title: "T", phase: "review" });
+    const before = await service.get(task.taskId);
+    await service.addEvent(task.taskId, "task.feedback.received", { text: "x", source: "user" });
+    const after = await service.get(task.taskId);
+    expect(after.phase).toBe("review");
+    expect(after.updatedAt).toBe(before.updatedAt);
+    expect(after.eventCount).toBe(before.eventCount + 1);
+  });
+
   it("task.created is a safe no-op via addEvent (already handled at create)", async () => {
     const task = await service.create({ title: "T" });
     const evt = await service.addEvent(task.taskId, "task.created", {

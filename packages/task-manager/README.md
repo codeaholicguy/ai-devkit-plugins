@@ -45,6 +45,7 @@ ai-devkit task create --title "Ship feature X" --name feature-x --phase requirem
 ai-devkit task phase feature-x design
 ai-devkit task progress feature-x --text "implementation started"
 ai-devkit task evidence feature-x --command "nx test" --exit-code 0 --passed --summary "all green"
+ai-devkit task feedback feature-x "cut settle window to 200ms" --source review --reopen implementation
 ai-devkit task show feature-x --events
 ```
 
@@ -57,6 +58,8 @@ Common commands:
 - `phase`, `status`, `progress`, `next`
 - `blocker <id> add <text>` and `blocker <id> resolve <blockerId>`
 - `evidence`, `artifact`, `assign`, `note`, `event`, `close`
+- `feedback <id> <text> [--source user|review|ci] [--reopen <phase>]`: records
+  `task.feedback.received`; `--reopen` also moves the phase back in the same call
 
 Global flags:
 
@@ -85,7 +88,7 @@ Available methods:
 - `setPhase`, `setStatus`, `setProgress`, `setNextStep`
 - `addBlocker`, `resolveBlocker`
 - `addEvidence`, `addArtifact`
-- `setAttribution`, `addNote`, `close`
+- `setAttribution`, `addNote`, `addFeedback`, `close`
 - `addEvent`, `getEvents`
 
 ## Storage
@@ -120,6 +123,7 @@ Supported event types:
 - `task.artifact.add`
 - `task.attribution.set`
 - `task.note.append`
+- `task.feedback.received`
 - `task.custom`
 - `task.closed`
 

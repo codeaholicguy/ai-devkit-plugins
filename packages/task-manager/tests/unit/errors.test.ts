@@ -52,6 +52,7 @@ describe("errors", () => {
   it("isTaskEventType guards the closed union", () => {
     expect(isTaskEventType("task.created")).toBe(true);
     expect(isTaskEventType("task.custom")).toBe(true);
+    expect(isTaskEventType("task.feedback.received")).toBe(true);
     expect(isTaskEventType("task.bogus")).toBe(false);
     expect(isTaskEventType("")).toBe(false);
   });
