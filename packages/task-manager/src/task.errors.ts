@@ -87,6 +87,7 @@ export function isTaskEventType(type: string): type is TaskEventType {
     "task.artifact.add",
     "task.attribution.set",
     "task.note.append",
+    "task.feedback.received",
     "task.custom",
     "task.closed",
   ].includes(type);

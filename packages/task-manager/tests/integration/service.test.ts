@@ -239,6 +239,79 @@ describe("TaskService (integration with TaskRepository)", () => {
     });
   });
 
+  describe("feedback", () => {
+    it("addFeedback records task.feedback.received with source defaulting to user", async () => {
+      const task = await service.create({ title: "T", phase: "review" });
+      const before = await service.get(task.taskId);
+      const updated = await service.addFeedback(task.taskId, { text: "cut settle window" });
+      expect(updated.phase).toBe("review");
+      expect(updated.eventCount).toBe(before.eventCount + 1);
+      const events = await readEventsFromDisk(task.taskId);
+      const feedback = events.find((e) => e.type === "task.feedback.received");
+      expect(feedback).toBeDefined();
+      expect(feedback!.payload).toEqual({ text: "cut settle window", source: "user" });
+    });
+
+    it("addFeedback records the given source and actor", async () => {
+      const task = await service.create({ title: "T" });
+      await service.addFeedback(
+        task.taskId,
+        { text: "flaky test", source: "ci" },
+        { actor: { agentType: "claude" } },
+      );
+      const [feedback] = await service.getEvents(task.taskId, { type: "task.feedback.received" });
+      expect(feedback!.payload).toEqual({ text: "flaky test", source: "ci" });
+      expect(feedback!.actor).toEqual({ agentType: "claude" });
+    });
+
+    it("addFeedback with reopen moves the phase back and emits task.phase.set with previous", async () => {
+      const task = await service.create({ title: "T", phase: "review" });
+      const updated = await service.addFeedback(task.taskId, {
+        text: "docs fix",
+        source: "review",
+        reopen: "implementation",
+      });
+      expect(updated.phase).toBe("implementation");
+      const events = await readEventsFromDisk(task.taskId);
+      const types = events.map((e) => e.type);
+      expect(types.slice(-2)).toEqual(["task.feedback.received", "task.phase.set"]);
+      expect(events[events.length - 1]!.payload).toEqual({
+        phase: "implementation",
+        previous: "review",
+      });
+      expect(updated.eventCount).toBe(events.length);
+    });
+
+    it("addFeedback rejects empty text", async () => {
+      const task = await service.create({ title: "T" });
+      await expect(service.addFeedback(task.taskId, { text: "  " })).rejects.toBeInstanceOf(
+        TaskValidationError,
+      );
+    });
+
+    it("addFeedback rejects an unknown source", async () => {
+      const task = await service.create({ title: "T" });
+      await expect(
+        service.addFeedback(task.taskId, { text: "x", source: "slack" as never }),
+      ).rejects.toBeInstanceOf(TaskValidationError);
+    });
+
+    it("addFeedback rejects an empty reopen phase without recording feedback", async () => {
+      const task = await service.create({ title: "T", phase: "review" });
+      await expect(
+        service.addFeedback(task.taskId, { text: "x", reopen: "  " }),
+      ).rejects.toBeInstanceOf(TaskValidationError);
+      const events = await service.getEvents(task.taskId, { type: "task.feedback.received" });
+      expect(events).toHaveLength(0);
+    });
+
+    it("addFeedback throws TaskNotFoundError for a missing task", async () => {
+      await expect(service.addFeedback(MISSING_TASK_ID, { text: "x" })).rejects.toBeInstanceOf(
+        TaskNotFoundError,
+      );
+    });
+  });
+
   describe("close", () => {
     it("marks task terminal and emits task.closed", async () => {
       const task = await service.create({ title: "T" });

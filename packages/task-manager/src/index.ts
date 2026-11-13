@@ -2,6 +2,7 @@ export type {
   Actor,
   LifecyclePhase,
   TaskStatus,
+  TaskFeedbackSource,
   TaskProgress,
   TaskLinks,
   TaskBlocker,
@@ -22,6 +23,7 @@ export type {
   TaskArtifactAddPayload,
   TaskAttributionSetPayload,
   TaskNoteAppendPayload,
+  TaskFeedbackReceivedPayload,
   TaskCustomPayload,
   TaskClosedPayload,
 } from "./task.types.js";

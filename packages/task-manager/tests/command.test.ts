@@ -24,6 +24,7 @@ const mockTaskService = {
   addArtifact: vi.fn(),
   setAttribution: vi.fn(),
   addNote: vi.fn(),
+  addFeedback: vi.fn(),
   close: vi.fn(),
   addEvent: vi.fn(),
   getEvents: vi.fn(),
@@ -549,6 +550,96 @@ describe("task command", () => {
         "quick note",
         expect.any(Object),
       );
+    });
+  });
+
+  describe("feedback", () => {
+    it("records feedback from variadic text with source defaulting to user", async () => {
+      const task = sampleTask();
+      mockTaskService.resolveTask.mockResolvedValue(task);
+      mockTaskService.addFeedback.mockResolvedValue(task);
+
+      const program = createProgram();
+      await program.parseAsync([
+        "node",
+        "test",
+        "task",
+        "feedback",
+        "demo",
+        "cut",
+        "settle",
+        "window",
+        "--json",
+      ]);
+      expect(mockTaskService.addFeedback).toHaveBeenCalledWith(
+        task.taskId,
+        { text: "cut settle window", source: "user", reopen: undefined },
+        { actor: undefined },
+      );
+      expect(JSON.parse(consoleLogSpy.mock.calls[0]![0] as string)).toMatchObject({
+        taskId: TASK_ID,
+      });
+    });
+
+    it("passes --source, --reopen and actor flags", async () => {
+      const task = sampleTask({ phase: "implementation" });
+      mockTaskService.resolveTask.mockResolvedValue(task);
+      mockTaskService.addFeedback.mockResolvedValue(task);
+
+      const program = createProgram();
+      await program.parseAsync([
+        "node",
+        "test",
+        "task",
+        "feedback",
+        "demo",
+        "docs",
+        "fix",
+        "--source",
+        "review",
+        "--reopen",
+        "implementation",
+        "--agent-type",
+        "claude",
+      ]);
+      expect(mockTaskService.addFeedback).toHaveBeenCalledWith(
+        task.taskId,
+        { text: "docs fix", source: "review", reopen: "implementation" },
+        { actor: { agentType: "claude" } },
+      );
+    });
+
+    it("errors on empty text without calling the service", async () => {
+      mockTaskService.resolveTask.mockResolvedValue(sampleTask());
+
+      const program = createProgram();
+      await program.parseAsync(["node", "test", "task", "feedback", "demo"]);
+      expect(mockTaskService.addFeedback).not.toHaveBeenCalled();
+      expect(mockRuntime.logger.error).toHaveBeenCalledWith(
+        "Feedback text must be a non-empty string.",
+      );
+      expect(process.exitCode).toBe(1);
+    });
+
+    it("errors on an unknown --source without calling the service", async () => {
+      mockTaskService.resolveTask.mockResolvedValue(sampleTask());
+
+      const program = createProgram();
+      await program.parseAsync([
+        "node",
+        "test",
+        "task",
+        "feedback",
+        "demo",
+        "x",
+        "--source",
+        "slack",
+      ]);
+      expect(mockTaskService.addFeedback).not.toHaveBeenCalled();
+      expect(mockRuntime.logger.error).toHaveBeenCalledWith(
+        'Invalid feedback source "slack". Expected one of: user, review, ci',
+      );
+      expect(process.exitCode).toBe(1);
     });
   });
 

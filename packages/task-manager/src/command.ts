@@ -3,10 +3,11 @@ import { readFileSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import * as path from "node:path";
 import { createTaskService, AmbiguousTaskRefError, isTaskEventType } from "./index.js";
-import type { Actor, Task, TaskService, TaskStatus } from "./index.js";
+import type { Actor, Task, TaskFeedbackSource, TaskService, TaskStatus } from "./index.js";
 
 const TITLE_MAX_LENGTH = 50;
 const VALID_STATUSES: TaskStatus[] = ["open", "active", "blocked", "completed", "abandoned"];
+const VALID_FEEDBACK_SOURCES: TaskFeedbackSource[] = ["user", "review", "ci"];
 
 interface AiDevkitRuntime {
   cwd: string;
@@ -541,6 +542,42 @@ export function register(command: Command, runtime: AiDevkitRuntime): void {
       });
       output(updated, opts.json);
     }),
+  );
+
+  addAttributionFlags(
+    command
+      .command("feedback <id> [text...]")
+      .description("Record user/review/CI feedback (event-only unless --reopen)")
+      .option("--source <source>", `Feedback source (${VALID_FEEDBACK_SOURCES.join("|")})`, "user")
+      .option("--reopen <phase>", "Also move the phase back (e.g. implementation)"),
+  ).action(
+    withErrorHandler(
+      "record feedback",
+      async (id: string, textParts: string[] | undefined, opts) => {
+        const service = await createService(runtime, opts.dbPath);
+        const resolved = await resolveOrError(runtime, service, id);
+        if (!resolved) return;
+        const text = (textParts ?? []).join(" ").trim();
+        if (!text) {
+          runtime.logger.error("Feedback text must be a non-empty string.");
+          process.exitCode = 1;
+          return;
+        }
+        if (!VALID_FEEDBACK_SOURCES.includes(opts.source)) {
+          runtime.logger.error(
+            `Invalid feedback source "${opts.source}". Expected one of: ${VALID_FEEDBACK_SOURCES.join(", ")}`,
+          );
+          process.exitCode = 1;
+          return;
+        }
+        const updated = await service.addFeedback(
+          resolved.taskId,
+          { text, source: opts.source, reopen: opts.reopen },
+          { actor: actorFromOptions(opts) },
+        );
+        output(updated, opts.json);
+      },
+    ),
   );
 
   addAttributionFlags(
